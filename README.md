@@ -1,1 +1,1 @@
-# Reticulum
+# Reticulum for DGCNN
