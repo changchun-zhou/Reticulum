@@ -21,25 +21,28 @@ def knn(x, k, chunk_size=1024):
     batch_size, _, num_points = x.size()
     idx_list = []
 
+    # Loop through chunks
     for start in range(0, num_points, chunk_size):
         end = min(start + chunk_size, num_points)
 
-        # Select a chunk of points
+        # Select the chunk
         chunk = x[:, :, start:end]  # (B, 3, chunk_size)
 
         # Compute pairwise distances within the chunk
-        dist = -2 * torch.matmul(chunk.transpose(2, 1), x)  # (B, chunk_size, N)
-        dist += torch.sum(chunk ** 2, dim=1, keepdim=True).transpose(2, 1)  # (B, chunk_size, N)
-        dist += torch.sum(x ** 2, dim=1, keepdim=True)  # (B, chunk_size, N)
+        dist = -2 * torch.matmul(chunk.transpose(2, 1), chunk)  # (B, chunk_size, chunk_size)
+        dist += torch.sum(chunk ** 2, dim=1, keepdim=True).transpose(2, 1)  # (B, chunk_size, chunk_size)
+        dist += torch.sum(chunk ** 2, dim=1, keepdim=True)  # (B, chunk_size, chunk_size)
 
-        # Get top-k indices for the chunk
+        # Get top-k nearest neighbors within the chunk
         idx = dist.topk(k=k, dim=-1, largest=False)[1]  # (B, chunk_size, k)
+
+        # Adjust indices to account for the original positions in the full point cloud
+        idx += start
         idx_list.append(idx)
 
-    # Concatenate indices for all chunks
+    # Concatenate indices from all chunks
     idx = torch.cat(idx_list, dim=1)  # (B, N, k)
     return idx
-
 
 def get_graph_feature_delayed_chunked(x, features, k=20, chunk_size=1024):
     """
@@ -47,7 +50,7 @@ def get_graph_feature_delayed_chunked(x, features, k=20, chunk_size=1024):
     """
     batch_size, num_dims, num_points = x.size()
 
-    # Perform chunked KNN
+    # Perform KNN within chunks
     idx = knn(x, k=k, chunk_size=chunk_size)  # (B, N, k)
 
     # Flatten batch and point indices
@@ -63,8 +66,7 @@ def get_graph_feature_delayed_chunked(x, features, k=20, chunk_size=1024):
     central_features = features.transpose(2, 1).unsqueeze(2).expand_as(feature_neighbors)
     combined_features = torch.cat((feature_neighbors - central_features, central_features), dim=-1)
 
-    return combined_features.permute(0, 3, 1, 2).contiguous()  # (B, 2*num_dims, N, k)
-
+    return combined_features.permute(0, 3, 1, 2).contiguous()
 
 class PointNet(nn.Module):
     def __init__(self, args, output_channels=40):
