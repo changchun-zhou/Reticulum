@@ -157,19 +157,21 @@ class DGCNN(nn.Module):
         x1 = x.max(dim=-1, keepdim=False)[0]
 
         # Layer 2
-        x = get_graph_feature_delayed_chunked(x1, x1, k=self.k, chunk_size=1024)
+        x = get_graph_feature_delayed_chunked(x, x, k=self.k, chunk_size=1024)
         x = self.conv2(x)
         x2 = x.max(dim=-1, keepdim=False)[0]
 
         # Layer 3
-        x = get_graph_feature_delayed_chunked(x2, x2, k=self.k, chunk_size=1024)
+        x = get_graph_feature_delayed_chunked(x, x, k=self.k, chunk_size=1024)
         x = self.conv3(x)
         x3 = x.max(dim=-1, keepdim=False)[0]
 
         # Layer 4
-        x = get_graph_feature_delayed_chunked(x3, x3, k=self.k, chunk_size=1024)
+        x = get_graph_feature_delayed_chunked(x, x, k=self.k, chunk_size=1024)
         x = self.conv4(x)
         x4 = x.max(dim=-1, keepdim=False)[0]
+        
+        #维度的事情后面再说，维度可以根据excel当中的输入输出轻易改变，但是延迟聚合与原模型的不同之处在于特征的聚合不参与后续卷积
 
         # Concatenate features and final layers
         x = torch.cat((x1, x2, x3, x4), dim=1)
