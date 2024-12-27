@@ -68,6 +68,10 @@ def get_graph_feature_delayed_chunked(x, features, k=20, chunk_size=1024):
 
     return combined_features.permute(0, 3, 1, 2).contiguous()
 
+
+
+
+
 class PointNet(nn.Module):
     def __init__(self, args, output_channels=40):
         super(PointNet, self).__init__()
@@ -117,25 +121,25 @@ class DGCNN(nn.Module):
         self.args = args
         self.k = args.k
 
-        self.bn1 = nn.BatchNorm2d(64)
-        self.bn2 = nn.BatchNorm2d(64)
-        self.bn3 = nn.BatchNorm2d(128)
-        self.bn4 = nn.BatchNorm2d(256)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.bn2 = nn.BatchNorm1d(64)
+        self.bn3 = nn.BatchNorm1d(128)
+        self.bn4 = nn.BatchNorm1d(256)
         self.bn5 = nn.BatchNorm1d(args.emb_dims)
 
-        self.conv1 = nn.Sequential(nn.Conv2d(6, 64, kernel_size=1, bias=False),
+        self.conv1 = nn.Sequential(nn.Conv1d(3, 64, kernel_size=1, bias=False),
                                    self.bn1,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv2 = nn.Sequential(nn.Conv2d(128, 64, kernel_size=1, bias=False),
+        self.conv2 = nn.Sequential(nn.Conv1d(128, 64, kernel_size=1, bias=False),
                                    self.bn2,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv3 = nn.Sequential(nn.Conv2d(128, 128, kernel_size=1, bias=False),
+        self.conv3 = nn.Sequential(nn.Conv1d(128, 128, kernel_size=1, bias=False),
                                    self.bn3,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv4 = nn.Sequential(nn.Conv2d(256, 256, kernel_size=1, bias=False),
+        self.conv4 = nn.Sequential(nn.Conv1d(256, 256, kernel_size=1, bias=False),
                                    self.bn4,
                                    nn.LeakyReLU(negative_slope=0.2))
-        self.conv5 = nn.Sequential(nn.Conv1d(512, args.emb_dims, kernel_size=1, bias=False),
+        self.conv5 = nn.Sequential(nn.Conv1d(1024, args.emb_dims, kernel_size=1, bias=False),
                                    self.bn5,
                                    nn.LeakyReLU(negative_slope=0.2))
 
@@ -153,25 +157,23 @@ class DGCNN(nn.Module):
         # Layer 1
         features = x
         x = self.conv1(x)
-        x = get_graph_feature_delayed_chunked(x, features, k=self.k, chunk_size=1024)
+        x = get_graph_feature_delayed_chunked(features, x, k=self.k)
         x1 = x.max(dim=-1, keepdim=False)[0]
 
         # Layer 2
         x_middle = self.conv2(x1)
-        x = get_graph_feature_delayed_chunked(x_middle, x_middle, k=self.k, chunk_size=1024)
+        x = get_graph_feature_delayed_chunked(x1, x_middle, k=self.k)
         x2 = x.max(dim=-1, keepdim=False)[0]
 
         # Layer 3
         x_middle = self.conv3(x2)
-        x = get_graph_feature_delayed_chunked(x_middle, x_middle, k=self.k, chunk_size=1024)
+        x = get_graph_feature_delayed_chunked(x2, x_middle, k=self.k)
         x3 = x.max(dim=-1, keepdim=False)[0]
 
         # Layer 4
         x_middle = self.conv4(x3)
-        x = get_graph_feature_delayed_chunked(x_middle, x_middle, k=self.k, chunk_size=1024)
+        x = get_graph_feature_delayed_chunked(x3, x_middle, k=self.k)
         x4 = x.max(dim=-1, keepdim=False)[0]
-        
-        #维度的事情后面再说，维度可以根据excel当中的输入输出轻易改变，但是延迟聚合与原模型的不同之处在于特征的聚合不参与后续卷积
 
         # Concatenate features and final layers
         x = torch.cat((x1, x2, x3, x4), dim=1)
