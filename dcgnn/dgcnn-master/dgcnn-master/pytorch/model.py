@@ -68,17 +68,26 @@ def get_graph_feature_delayed_chunked(x, features, k=20, chunk_size=1024):
 
     return combined_features.permute(0, 3, 1, 2).contiguous()
 
-def prune_points(x, keep_ratio=0.7):
+def prune_points_by_value(x, keep_ratio=0.7):
+    """
+    排序依据：每个点在特征维度上的 L2 范数。
+    """
     B, C, N = x.size()
     keep_num = int(N * keep_ratio)
-    
     x_pruned_list = []
+
     for b in range(B):
-        idx = torch.randperm(N, device=x.device)[:keep_num]
-        x_pruned_list.append(x[b:b+1, :, idx])  # 保留 shape: (1, C, keep_num)
-    
-    x_pruned = torch.cat(x_pruned_list, dim=0)
+        x_b = x[b]  # (C, N)
+        importance = torch.norm(x_b, p=2, dim=0)  # (N,)
+        # 得到按 importance 降序排列的索引
+        _, sorted_idx = torch.sort(importance, descending=True)
+        # 保留前 keep_num 个点的索引
+        keep_idx = sorted_idx[:keep_num]
+        # 收集该 batch 的保留点
+        x_pruned_list.append(x[b:b+1, :, keep_idx])  # shape: (1, C, keep_num)
+    x_pruned = torch.cat(x_pruned_list, dim=0)  # (B, C, keep_num)
     return x_pruned
+
 
 
 
