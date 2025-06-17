@@ -68,7 +68,17 @@ def get_graph_feature_delayed_chunked(x, features, k=20, chunk_size=1024):
 
     return combined_features.permute(0, 3, 1, 2).contiguous()
 
-
+def prune_points(x, keep_ratio=0.7):
+    B, C, N = x.size()
+    keep_num = int(N * keep_ratio)
+    
+    x_pruned_list = []
+    for b in range(B):
+        idx = torch.randperm(N, device=x.device)[:keep_num]
+        x_pruned_list.append(x[b:b+1, :, idx])  # 保留 shape: (1, C, keep_num)
+    
+    x_pruned = torch.cat(x_pruned_list, dim=0)
+    return x_pruned
 
 
 
